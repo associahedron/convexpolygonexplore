@@ -28,7 +28,43 @@ class Codeword:
         return num
 
     def is_rotation_neighbor(self, other):
-        pass
+        """
+        Figure out if two codewords are rotation neighbors, as per Lemma 2 in the paper
+
+        Parameters
+        ----------
+        Codeword: other
+            Other codeword
+        """
+        w1 = self.w
+        w2 = other.w
+        diff = w1 - w2
+        is_neighbor = True
+        # Make sure one entry is 1 and the other is -1
+        if np.max(np.abs(diff) == 1) and np.sum(diff) == 0 and np.sum(np.abs(diff)) == 2:
+            a = np.argmax(diff == -1)
+            b = np.argmax(diff == 1)
+            if a < b:
+                # Case 1
+                for k in range(a+1, b):
+                    is_neighbor = is_neighbor and np.sum(w1[k:b]) < b-k
+                if a == 0:
+                    is_neighbor = is_neighbor and np.sum(w1[0:b]) >= b-a-1
+                else:
+                    is_neighbor = is_neighbor and np.sum(w1[a:b]) >= b-a
+            else:
+                # Case 2
+                a, b = b, a
+                for k in range(a+1, b):
+                    is_neighbor = is_neighbor and np.sum(w1[k:b]) < b-k
+                if a == 0:
+                    is_neighbor = is_neighbor and np.sum(w1[0:b]) >= b-a
+                else:
+                    is_neighbor = is_neighbor and np.sum(w1[a:b]) > b-a
+        else:
+            is_neighbor = False
+        return is_neighbor
+
 
     def draw(self, d, c, options=None):
         """
@@ -96,19 +132,19 @@ class Codeword:
             i -= 1
         plt.axis("off")
 
-def make_stack_rec(w, d, y_offset, opts, order=0):
+def make_stack_rec(w, d, y_offset, opts, stack_index, all_codewords, draw=True):
     n = w.size
     diam = opts["diameter"]
     h = w.size-d-np.sum(w[d+1:])+1
-    title = "d = {}, h = {}".format(d, h)
     x_offset = 1.5*diam*(n-d-1)
-
-    plt.text(x_offset-diam/2, y_offset+1.2*diam/2, title)
+    if draw:
+        plt.text(x_offset-diam/2, y_offset+1.2*diam/2, "d = {}, h = {}".format(d, h))
     y1 = y_offset+1.4*diam/2
     n_items = 0
     vals = list(range(h))
-    if order%2 == 1:
+    if stack_index[d]%2 == 1:
         vals = reversed(vals)
+    stack_index[d] += 1
     max_extreme = 0
     for val in vals:
         wi = np.array(w)
@@ -119,23 +155,23 @@ def make_stack_rec(w, d, y_offset, opts, order=0):
             wi[0] = n-1-np.sum(wi[1:])
             ni = 1
             c = Codeword(wi)
-            c.draw(diam, np.array([x_offset, y_offset]), {
-                "bold_idxs":set([1])
-            })
-            s = "{}".format(wi)
+            all_codewords.append(c)
             n_extreme = c.get_num_extreme()
-            plt.text(x_offset+diam*1.2/2, y_offset, s)
+            if draw:
+                c.draw(diam, np.array([x_offset, y_offset]), {
+                    "bold_idxs":set([1])
+                })
+                s = "{}".format(wi)
+                plt.text(x_offset+diam*1.2/2, y_offset, s)
         else:
-            c = Codeword(wi)
-            c.draw(diam, np.array([x_offset, y_offset]), {
-                "min_idx":d,
-                "bold_idxs":set([d])
-            })
-            ni, n_extreme = make_stack_rec(wi, d-1, y_offset, opts, order)
-            #order += 1
+            if draw:
+                c = Codeword(wi)
+                c.draw(diam, np.array([x_offset, y_offset]), {
+                    "min_idx":d,
+                    "bold_idxs":set([d])
+                })
+            ni, n_extreme = make_stack_rec(wi, d-1, y_offset, opts, stack_index, all_codewords, draw)
         max_extreme = max(max_extreme, n_extreme)
-        if n_extreme >= d:
-            plt.scatter(x_offset, y_offset, 200, c='r', marker='x')
         n_items += ni
         y_offset -= diam*1.5*ni
     y2 = y_offset + 1.4*diam/2
@@ -143,9 +179,9 @@ def make_stack_rec(w, d, y_offset, opts, order=0):
     x2 = x1 + 1.5*diam
     if d == 1:
         x2 += 0.7*diam
-    plt.plot([x1, x1, x2, x2, x1], [y1, y2, y2, y1, y1], c='k')
+    if draw:
+        plt.plot([x1, x1, x2, x2, x1], [y1, y2, y2, y1, y1], c='k')
     return n_items, max_extreme
-
 
 def make_stack(n, opts=None):
     if not opts:
@@ -153,7 +189,13 @@ def make_stack(n, opts=None):
     if not "diameter" in opts:
         opts["diameter"] = 1
     w = np.zeros(n, dtype=int)
-    make_stack_rec(w, n-1, 0, opts)
+    stack_index = np.zeros(n, dtype=int)
+    codewords = []
+    make_stack_rec(w, n-1, 0, opts, stack_index, codewords, True)
+    print(len(codewords))
+    for i in range(len(codewords)-1):
+        print(codewords[i].w, codewords[i].is_rotation_neighbor(codewords[i+1]))  
+    print(codewords[-1].w)
 
 def make_octagon_stack():
     """
