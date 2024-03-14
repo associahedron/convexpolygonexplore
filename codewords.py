@@ -65,6 +65,44 @@ class Codeword:
             is_neighbor = False
         return is_neighbor
 
+    def get_edges(self, min_idx=0):
+        w = self.w
+        N = len(w)
+        visible = np.ones(N+2)
+        i = N-1
+        edges = []
+        while i >= min_idx:
+            wi = w[i]
+            j = i+2
+            while wi > 0:
+                # Find closest visible vertex
+                while visible[j] == 0:
+                    j += 1
+                edges.append((i, j))
+                visible[i+1:j] = 0
+                wi -= 1
+                j += 1
+            i -= 1
+        return set(edges)
+    
+    def get_triangles(self):
+        """
+        A quick n' dirty O(N^3) method to extract triangles from an edge list
+        """
+        N = len(self.w)+2
+        edges = self.get_edges()
+        edges.add((0, N-1))
+        for i in range(N-1):
+            edges.add((i, i+1))
+        tris = []
+        for i in range(N):
+            for j in range(N+1):
+                if (i, j) in edges:
+                    for k in range(N+2):
+                        if (j, k) in edges and (i, k) in edges:
+                            tris.append((i, j, k))
+        return tris
+
 
     def draw(self, d, c, options=None):
         """
@@ -101,109 +139,142 @@ class Codeword:
         X = np.zeros((N+2, 2))
         X[:, 0] = r*np.cos(theta) + c[0]
         X[:, 1] = r*np.sin(theta) + c[1]
-        plt.scatter(X[:, 0], X[:, 1], c='k') 
+        self.X = X
+        XTheta = np.array(X)
+        XTheta[:, 0] += r*0.2*np.cos(theta)
+        XTheta[:, 1] += r*0.2*np.sin(theta)
+        self.XTheta = XTheta
+        plt.scatter(X[:, 0], X[:, 1], c='k', zorder=100) 
         if options["show_codeword"]:
             for i in range(N):
                 if i >= min_idx:
                     c = 'k'
                     if i in options["bold_idxs"]:
-                        c = 'r'
-                    xi = X[i, 0] + r*0.2*np.cos(theta[i])
-                    yi = X[i, 1] + r*0.2*np.sin(theta[i])
-                    plt.text(xi, yi, "{}".format(w[i]), c=c)
+                        c = 'C1'
+                    plt.text(XTheta[i, 0], XTheta[i, 1], "{}".format(w[i]), c=c, ha="center", va="center")
         X = np.concatenate((X, X[0, :][None, :]), axis=0)
         plt.plot(X[:, 0], X[:, 1], c='k')
 
         ## Step 2: Draw polygon edges
         w = np.concatenate((w, np.array([0, 0])))
-        visible = np.ones(N+2)
         i = N-1
-        while i >= min_idx:
-            wi = w[i]
-            j = i+2
-            while wi > 0:
-                # Find closest visible vertex
-                while visible[j] == 0:
-                    j += 1
-                plt.plot(X[[i, j], 0], X[[i, j], 1], c='k')
-                visible[i+1:j] = 0
-                wi -= 1
-                j += 1
-            i -= 1
+        for (i, j) in self.get_edges(min_idx):
+            plt.plot(X[[i, j], 0], X[[i, j], 1], c='k')
         plt.axis("off")
 
-def make_stack_rec(w, d, y_offset, opts, stack_index, all_codewords, draw=True):
-    n = w.size
-    diam = opts["diameter"]
-    h = w.size-d-np.sum(w[d+1:])+1
-    x_offset = 1.5*diam*(n-d-1)
-    if draw:
-        plt.text(x_offset-diam/2, y_offset+1.2*diam/2, "d = {}, h = {}".format(d, h))
-    y1 = y_offset+1.4*diam/2
-    n_items = 0
-    vals = list(range(h))
-    if stack_index[d]%2 == 1:
-        vals = reversed(vals)
-    stack_index[d] += 1
-    max_extreme = 0
-    for val in vals:
-        wi = np.array(w)
-        wi[d] = val
-        n_extreme = 0
-        if d == 1:
-            ## Base case
-            wi[0] = n-1-np.sum(wi[1:])
-            ni = 1
-            c = Codeword(wi)
-            all_codewords.append(c)
-            n_extreme = c.get_num_extreme()
-            if draw:
-                c.draw(diam, np.array([x_offset, y_offset]), {
-                    "bold_idxs":set([1])
-                })
-                s = "{}".format(wi)
-                plt.text(x_offset+diam*1.2/2, y_offset, s)
-        else:
-            if draw:
-                c = Codeword(wi)
-                c.draw(diam, np.array([x_offset, y_offset]), {
-                    "min_idx":d,
-                    "bold_idxs":set([d])
-                })
-            ni, n_extreme = make_stack_rec(wi, d-1, y_offset, opts, stack_index, all_codewords, draw)
-        max_extreme = max(max_extreme, n_extreme)
-        n_items += ni
-        y_offset -= diam*1.5*ni
-    y2 = y_offset + 1.4*diam/2
-    x1 = x_offset - 1.2*diam/2
-    x2 = x1 + 1.5*diam
-    if d == 1:
-        x2 += 0.7*diam
-    if draw:
-        plt.plot([x1, x1, x2, x2, x1], [y1, y2, y2, y1, y1], c='k')
-    return n_items, max_extreme
 
-def make_stack(n, opts=None):
-    if not opts:
-        opts = {}
-    if not "diameter" in opts:
-        opts["diameter"] = 1
-    w = np.zeros(n, dtype=int)
-    stack_index = np.zeros(n, dtype=int)
-    codewords = []
-    make_stack_rec(w, n-1, 0, opts, stack_index, codewords, True)
-    print(len(codewords))
-    for i in range(len(codewords)-1):
-        print(codewords[i].w, codewords[i].is_rotation_neighbor(codewords[i+1]))  
-    print(codewords[-1].w)
+class Associahedron:
+    def __init__(self, n, opts=None, draw=True):
+        if not opts:
+            opts = {}
+        if not "diameter" in opts:
+            opts["diameter"] = 1
+        if not "g_x_offset" in opts:
+            opts["g_x_offset"] = 0
+        if not "g_y_offset" in opts:
+            opts["g_y_offset"] = 0
+        w = np.zeros(n, dtype=int)
+        self.stack_index = np.zeros(n, dtype=int)
+        self.codewords = []
+        self.make_stack_rec(w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, draw)
+
+
+    def make_stack_rec(self, w, d, g_x_offset, y_offset, opts, draw=True):
+        n = w.size
+        diam = opts["diameter"]
+        dy = -0.1*diam
+        h = w.size-d-np.sum(w[d+1:])+1
+        x_offset = g_x_offset + 1.5*diam*(n-d-1)
+        if draw:
+            plt.text(x_offset, y_offset+1.2*diam/2, "d = {}, h = {}".format(d, h), ha="center", va="center")
+        y1 = y_offset+1.4*diam/2
+        n_items = 0
+        vals = list(range(h))
+        if self.stack_index[d]%2 == 1:
+            vals = reversed(vals)
+        self.stack_index[d] += 1
+        for val in vals:
+            wi = np.array(w)
+            wi[d] = val
+            if d == 1:
+                ## Base case
+                wi[0] = n-1-np.sum(wi[1:])
+                ni = 1
+                c = Codeword(wi)
+                self.codewords.append(c)
+                if draw:
+                    c.draw(diam, np.array([x_offset, y_offset+dy]), {
+                        "bold_idxs":set([1])
+                    })
+                    s = "".join([str(u) for u in wi])
+                    plt.text(x_offset+1.2*diam/2, y_offset+dy, s, va="center")
+                    # Indicate quad where flip happened
+                    if len(self.codewords) > 1:
+                        e1 = c.get_edges()
+                        c2 = self.codewords[-2]
+                        e2 = c2.get_edges()
+                        e = np.array(list(e2.difference(e1)), dtype=int).flatten()
+                        plt.plot(c.X[e, 0], c.X[e, 1], c='k', linewidth=1, linestyle='--')
+                        for idx in np.where(c.w != c2.w)[0]:
+                            plt.text(c.XTheta[idx, 0], c.XTheta[idx, 1], "{}".format(c.w[idx]), ha="center", va="center", c='C3')
+
+            else:
+                if draw:
+                    c = Codeword(wi)
+                    c.draw(diam, np.array([x_offset, y_offset+dy]), {
+                        "min_idx":d,
+                        "bold_idxs":set([d])
+                    })
+                    s = "".join([str(u) for u in wi[d:]])
+                    plt.text(x_offset, y_offset+diam/3.2+dy, s, ha="center", va="center")
+                ni = self.make_stack_rec(wi, d-1, g_x_offset, y_offset, opts, draw)
+            n_items += ni
+            y_offset -= diam*1.5*ni
+        y2 = y_offset + 1.4*diam/2
+        x1 = x_offset - 1.4*diam/2
+        x2 = x1 + 1.5*diam
+        if d == 1:
+            x2 += 0.1*n*diam
+        if draw:
+            xbox = [x1, x1, x2, x2, x1]
+            ybox = [y1, y2, y2, y1, y1]
+            plt.plot(xbox, ybox, c='k')
+            if self.stack_index[d]%2 == 0:
+                plt.fill(xbox, ybox, c=[0.9]*3)
+        return n_items
+
 
 def make_octagon_stack():
     """
     As an example, make a stack of octagons
     """
     plt.figure(figsize=(20, 400))
-    make_stack(6)
+    a6 = Associahedron(6, draw=True)
     plt.axis("equal")
     plt.savefig("octagonstack.svg", bbox_inches='tight')    
 
+def make_n_stack():
+    fac = 1
+    plt.figure(figsize=(fac*20, fac*32)) #*42/14
+    a2 = Associahedron(2, draw=True)
+    a3 = Associahedron(3, {"g_y_offset":-14}, draw=True)
+    a4 = Associahedron(4, {"g_x_offset":5}, draw=True)
+    
+    plt.axis("equal")
+    plt.savefig("stacks.svg", bbox_inches='tight')    
+
+
 make_octagon_stack()
+#make_n_stack()
+    
+"""
+c = Codeword([0, 1, 2, 2, 0, 0])
+c.draw(1, np.array([0, 0]))
+T = c.get_triangles()
+print(T)
+for ijk in T:
+    idx = np.array(list(ijk), dtype=int)
+    x = np.mean(c.X[ijk, :], axis=0)
+    plt.scatter(x[0], x[1])
+plt.show()
+"""
