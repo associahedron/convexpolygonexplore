@@ -1,6 +1,49 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+def are_rotation_neighbors(w1, w2):
+    """
+    Figure out if two codewords are rotation neighbors, as per Lemma 2 in the paper
+
+    Parameters
+    ----------
+    w1: ndarray(N)
+        First codeword
+    w2: ndarray(N)
+        Second codeword
+
+    Returns
+    -------
+    True if w1 and w2 are rotation neighbors, and False otherwise
+    """
+    diff = w1 - w2
+    is_neighbor = True
+    # Make sure one entry is 1 and the other is -1
+    if np.max(np.abs(diff) == 1) and np.sum(diff) == 0 and np.sum(np.abs(diff)) == 2:
+        a = np.argmax(diff == -1)
+        b = np.argmax(diff == 1)
+        if a < b:
+            # Case 1
+            for k in range(a+1, b):
+                is_neighbor = is_neighbor and np.sum(w1[k:b]) < b-k
+            if a == 0:
+                is_neighbor = is_neighbor and np.sum(w1[0:b]) >= b-a-1
+            else:
+                is_neighbor = is_neighbor and np.sum(w1[a:b]) >= b-a
+        else:
+            # Case 2
+            a, b = b, a
+            for k in range(a+1, b):
+                is_neighbor = is_neighbor and np.sum(w1[k:b]) < b-k
+            if a == 0:
+                is_neighbor = is_neighbor and np.sum(w1[0:b]) >= b-a
+            else:
+                is_neighbor = is_neighbor and np.sum(w1[a:b]) > b-a
+    else:
+        is_neighbor = False
+    return is_neighbor
+
 class Codeword:
     def __init__(self, w):
         if type(w) is int:
@@ -36,34 +79,7 @@ class Codeword:
         Codeword: other
             Other codeword
         """
-        w1 = self.w
-        w2 = other.w
-        diff = w1 - w2
-        is_neighbor = True
-        # Make sure one entry is 1 and the other is -1
-        if np.max(np.abs(diff) == 1) and np.sum(diff) == 0 and np.sum(np.abs(diff)) == 2:
-            a = np.argmax(diff == -1)
-            b = np.argmax(diff == 1)
-            if a < b:
-                # Case 1
-                for k in range(a+1, b):
-                    is_neighbor = is_neighbor and np.sum(w1[k:b]) < b-k
-                if a == 0:
-                    is_neighbor = is_neighbor and np.sum(w1[0:b]) >= b-a-1
-                else:
-                    is_neighbor = is_neighbor and np.sum(w1[a:b]) >= b-a
-            else:
-                # Case 2
-                a, b = b, a
-                for k in range(a+1, b):
-                    is_neighbor = is_neighbor and np.sum(w1[k:b]) < b-k
-                if a == 0:
-                    is_neighbor = is_neighbor and np.sum(w1[0:b]) >= b-a
-                else:
-                    is_neighbor = is_neighbor and np.sum(w1[a:b]) > b-a
-        else:
-            is_neighbor = False
-        return is_neighbor
+        return are_rotation_neighbors(self.w, other.w)
 
     def get_edges(self, min_idx=0):
         w = self.w
@@ -119,6 +135,12 @@ class Codeword:
                 Minimum index from which to draw edges or numbers
             bold_idxs: set
                 Bold the indices in this set (useful for stacks)
+            color:
+                Color to draw polygon (default 'k')
+            circled_vertices: list of int
+                Indices of vertices to circle
+            dotted_edges: list of [int, int]
+                Edges to draw dotted (not necessarily in the triangulation)
         }
         """
         if not options:
@@ -129,6 +151,12 @@ class Codeword:
             options["min_idx"] = 0
         if not "bold_idxs" in options:
             options["bold_idxs"] = set([])
+        if not "color" in options:
+            options["color"] = 'k'
+        if not "circled_vertices" in options:
+            options["circled_vertices"] = []
+        if not "dotted_edges" in options:
+            options["dotted_edges"] = []
 
         min_idx = options["min_idx"]
         ## Step 1: Draw polygon boundary
@@ -139,28 +167,34 @@ class Codeword:
         X = np.zeros((N+2, 2))
         X[:, 0] = r*np.cos(theta) + c[0]
         X[:, 1] = r*np.sin(theta) + c[1]
-        self.X = X
         XTheta = np.array(X)
         XTheta[:, 0] += r*0.2*np.cos(theta)
         XTheta[:, 1] += r*0.2*np.sin(theta)
-        self.XTheta = XTheta
-        plt.scatter(X[:, 0], X[:, 1], c='k', zorder=100) 
+        plt.scatter(X[:, 0], X[:, 1], c=options["color"], zorder=100) 
         if options["show_codeword"]:
             for i in range(N):
                 if i >= min_idx:
-                    c = 'k'
+                    c = options["color"]
                     if i in options["bold_idxs"]:
                         c = 'C1'
                     plt.text(XTheta[i, 0], XTheta[i, 1], "{}".format(w[i]), c=c, ha="center", va="center")
         X = np.concatenate((X, X[0, :][None, :]), axis=0)
-        plt.plot(X[:, 0], X[:, 1], c='k')
+        plt.plot(X[:, 0], X[:, 1], c=options["color"])
 
         ## Step 2: Draw polygon edges
         w = np.concatenate((w, np.array([0, 0])))
         i = N-1
         for (i, j) in self.get_edges(min_idx):
-            plt.plot(X[[i, j], 0], X[[i, j], 1], c='k')
+            plt.plot(X[[i, j], 0], X[[i, j], 1], c=options["color"])
         plt.axis("off")
+
+        ## Step 3: Circle any vertices
+        for idx in options["circled_vertices"]:
+            plt.scatter(XTheta[idx, 0], XTheta[idx, 1], s=200, facecolors='none', edgecolors='C3', zorder=101)
+
+        ## Step 4: Draw any dotted edges
+        for [i, j] in options["dotted_edges"]:
+            plt.plot(X[[i, j], 0], X[[i, j], 1], c='k', linestyle='--')
 
 
 class Associahedron:
@@ -201,22 +235,28 @@ class Associahedron:
                 wi[0] = n-1-np.sum(wi[1:])
                 ni = 1
                 c = Codeword(wi)
-                self.codewords.append(c)
+                self.codewords.append(dict(
+                    c=c,
+                    x=x_offset,
+                    y=y_offset
+                ))
                 if draw:
+                    dotted_edges = []
+                    circled_vertices = []
+                    if len(self.codewords) > 1:
+                        # Indicate quad where flip happened
+                        e1 = c.get_edges()
+                        c2 = self.codewords[-2]["c"]
+                        e2 = c2.get_edges()
+                        dotted_edges = np.array(list(e2.difference(e1)), dtype=int)
+                        circled_vertices = np.where(c.w != c2.w)
                     c.draw(diam, np.array([x_offset, y_offset+dy]), {
-                        "bold_idxs":set([1])
+                        "bold_idxs":set([1]),
+                        "circled_vertices": circled_vertices,
+                        "dotted_edges":dotted_edges
                     })
                     s = "".join([str(u) for u in wi])
                     plt.text(x_offset+1.2*diam/2, y_offset+dy, s, va="center")
-                    # Indicate quad where flip happened
-                    if len(self.codewords) > 1:
-                        e1 = c.get_edges()
-                        c2 = self.codewords[-2]
-                        e2 = c2.get_edges()
-                        e = np.array(list(e2.difference(e1)), dtype=int).flatten()
-                        plt.plot(c.X[e, 0], c.X[e, 1], c='k', linewidth=1, linestyle='--')
-                        for idx in np.where(c.w != c2.w)[0]:
-                            plt.text(c.XTheta[idx, 0], c.XTheta[idx, 1], "{}".format(c.w[idx]), ha="center", va="center", c='C3')
 
             else:
                 if draw:
@@ -264,8 +304,26 @@ def make_n_stack():
     plt.savefig("stacks.svg", bbox_inches='tight')    
 
 
+def non_rotation_example():
+    ## Fails check 2 only
+    #c1 = Codeword([1, 1, 0, 2, 1, 0])
+    #c2 = Codeword([1, 0, 1, 2, 1, 0])
+    
+    c1 = Codeword([2, 0, 0, 1, 1, 1])
+    c2 = Codeword([2, 1, 0, 0, 1, 1])
+    
+    plt.figure(figsize=(6, 6))
+    c1.draw(1, np.array([0, 0]), {"color":"C0"})
+    c1.draw(1, np.array([0, -1.5]), {"color":"C0"})
+    c2.draw(1, np.array([0, 0]), {"color":"C1"})
+    c2.draw(1, np.array([1.5, 0]), {"color":"C1"})
+    plt.axis("equal")
+    plt.savefig("RotExample.svg", bbox_inches='tight')
+
 make_octagon_stack()
 #make_n_stack()
+    
+#non_rotation_example()
     
 """
 c = Codeword([0, 1, 2, 2, 0, 0])
@@ -278,3 +336,4 @@ for ijk in T:
     plt.scatter(x[0], x[1])
 plt.show()
 """
+
