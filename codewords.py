@@ -1,6 +1,71 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+class Node:
+    def __init__(self):
+        self.left = None
+        self.right = None
+    
+    def inorder(self, x):
+        if self.left:
+            self.left.inorder(x)
+        self.x = x[0]
+        x[0] += 1
+        if self.right:
+            self.right.inorder(x)
+        
+    def draw(self, opts, depth=0):
+        from utils import draw_curve
+        xoff, xfac, yoff, yfac = opts["xoff"], opts["xfac"], opts["yoff"], opts["yfac"]
+        x1 = xoff + self.x*xfac
+        y1 = yoff - yfac*depth
+        y2 = yoff - yfac*(depth+1)
+        plt.scatter(x1, y1, c='k')
+        if self.left:
+            x2 = xoff + self.left.x*xfac
+            draw_curve([x1, y1], [x2, y2])
+            self.left.draw(opts, depth+1)
+        if self.right:
+            x2 = xoff + self.right.x*xfac
+            draw_curve([x1, y1], [x2, y2])
+            self.right.draw(opts, depth+1)
+
+class HEdge:
+    def __init__(self):
+        self.pair = None
+        self.next = None
+    
+    def pair_other(self, other):
+        self.pair = other
+        other.pair = self
+
+    def get_tree(self):
+        root = Node()
+        if self.next.pair: # Left node
+            root.left = self.next.pair.get_tree()
+        else:
+            root.left = Node() # Leaf node
+        if self.next.next.pair: # Right node
+            root.right = self.next.next.pair.get_tree()
+        else:
+            root.right = Node() # Leaf node
+        return root
+    
+def draw_tree(root, opts=None):
+    if not opts:
+        opts = {}
+    if not "xoff" in opts:
+        opts["xoff"] = 0
+    if not "xfac" in opts:
+        opts["xfac"] = 1
+    if not "yoff" in opts:
+        opts["yoff"] = 0
+    if not "yfac" in opts:
+        opts["yfac"] = 1
+    x = [0]
+    root.inorder(x)
+    root.draw(opts, 0)
+
 
 def are_rotation_neighbors(w1, w2):
     """
@@ -64,7 +129,7 @@ class Codeword:
         num = 0
         k = 1
         while k < n and is_extreme:
-            is_extreme = is_extreme and (w[k] == 0 or w[k] == n-k-np.sum(w[k+1:]))
+            is_extreme = is_extreme and ((w[k] == 0) or (w[k] == n-k-np.sum(w[k+1:])))
             if is_extreme:
                 num += 1
             k += 1
@@ -82,6 +147,9 @@ class Codeword:
         return are_rotation_neighbors(self.w, other.w)
 
     def get_edges(self, min_idx=0):
+        """
+        Extract the internal edges from the codeword
+        """
         w = self.w
         N = len(w)
         visible = np.ones(N+2)
@@ -101,24 +169,53 @@ class Codeword:
             i -= 1
         return set(edges)
     
-    def get_triangles(self):
+    def get_tris(self):
         """
-        A quick n' dirty O(N^3) method to extract triangles from an edge list
+        A semi-elegant method to get all of the unique triangles
         """
-        N = len(self.w)+2
+        N = len(self.w)
         edges = self.get_edges()
-        edges.add((0, N-1))
-        for i in range(N-1):
-            edges.add((i, i+1))
-        tris = []
-        for i in range(N):
-            for j in range(N+1):
-                if (i, j) in edges:
-                    for k in range(N+2):
-                        if (j, k) in edges and (i, k) in edges:
-                            tris.append((i, j, k))
+        v2edge = {i:set([]) for i in range(N+2)}
+        for [i, j] in edges:
+            v2edge[i].add(j)
+            v2edge[j].add(i)
+        for i in v2edge:
+            v2edge[i] = sorted(list(v2edge[i]))
+        for i in v2edge:
+            v2edge[i] = [(i+1)%(N+2)] + v2edge[i] + [(i+N+1)%(N+2)]
+        tris = set([])
+        for i in v2edge:
+            js = v2edge[i]
+            for k in range(1, len(js)):
+                tri = tuple(sorted([js[k-1], i, js[k]]))
+                tris.add(tri)
         return tris
 
+    def get_tree(self):
+        """
+        Create the tree from this codeword, using the half-edge as an
+        intermediate data structure for the triangulation
+        """
+        N = len(self.w)
+        tris = self.get_tris()
+        hedges = {}
+        for ijk in tris:
+            hs = []
+            for x in range(3):
+                e = (ijk[x], ijk[(x+1)%3])
+                h = HEdge()
+                hedges[e] = h
+                hs.append(h)
+            for i in range(3):
+                hs[i].next = hs[(i+1)%3]
+        for ijk in tris:
+            for x in range(3):
+                e1 = (ijk[x], ijk[(x+1)%3])
+                e2 = (ijk[(x+1)%3], ijk[x])
+                if e2 in hedges:
+                    hedges[e1].pair_other(hedges[e2])
+        print(hedges.keys())
+        return hedges[(N+1, 0)].get_tree()
 
     def draw(self, d, c, options=None):
         """
@@ -135,12 +232,18 @@ class Codeword:
                 Minimum index from which to draw edges or numbers
             bold_idxs: set
                 Bold the indices in this set (useful for stacks)
+            bold_color
+                Color to draw bolded items
             color:
                 Color to draw polygon (default 'k')
             circled_vertices: list of int
                 Indices of vertices to circle
             dotted_edges: list of [int, int]
                 Edges to draw dotted (not necessarily in the triangulation)
+            dotted_color: 
+                Color to draw dotted edges if they exist
+            draw_index: bool
+                If True, draw indices instead of values
         }
         """
         if not options:
@@ -151,12 +254,18 @@ class Codeword:
             options["min_idx"] = 0
         if not "bold_idxs" in options:
             options["bold_idxs"] = set([])
+        if not "bold_color" in options:
+            options["bold_color"] = 'C1'
         if not "color" in options:
             options["color"] = 'k'
         if not "circled_vertices" in options:
             options["circled_vertices"] = []
         if not "dotted_edges" in options:
             options["dotted_edges"] = []
+        if not "dotted_color" in options:
+            options["dotted_color"] = 'k'
+        if not "draw_index" in options:
+            options["draw_index"] = False
 
         min_idx = options["min_idx"]
         ## Step 1: Draw polygon boundary
@@ -167,17 +276,26 @@ class Codeword:
         X = np.zeros((N+2, 2))
         X[:, 0] = r*np.cos(theta) + c[0]
         X[:, 1] = r*np.sin(theta) + c[1]
+        self.X = X
         XTheta = np.array(X)
         XTheta[:, 0] += r*0.2*np.cos(theta)
         XTheta[:, 1] += r*0.2*np.sin(theta)
         plt.scatter(X[:, 0], X[:, 1], c=options["color"], zorder=100) 
+        rg = N
+        if options["draw_index"]:
+            rg = N+2
         if options["show_codeword"]:
-            for i in range(N):
+            for i in range(rg):
                 if i >= min_idx:
                     c = options["color"]
+                    weight = "regular"
                     if i in options["bold_idxs"]:
-                        c = 'C1'
-                    plt.text(XTheta[i, 0], XTheta[i, 1], "{}".format(w[i]), c=c, ha="center", va="center")
+                        c = options["bold_color"]
+                        weight = "black"
+                    val = i
+                    if not options["draw_index"]:
+                        val = w[i]
+                    plt.text(XTheta[i, 0], XTheta[i, 1], "{}".format(val), c=c, ha="center", va="center", weight=weight)
         X = np.concatenate((X, X[0, :][None, :]), axis=0)
         plt.plot(X[:, 0], X[:, 1], c=options["color"])
 
@@ -194,7 +312,7 @@ class Codeword:
 
         ## Step 4: Draw any dotted edges
         for [i, j] in options["dotted_edges"]:
-            plt.plot(X[[i, j], 0], X[[i, j], 1], c='k', linestyle='--')
+            plt.plot(X[[i, j], 0], X[[i, j], 1], c=options["dotted_color"], linestyle='--')
 
 
 class Associahedron:
@@ -249,7 +367,7 @@ class Associahedron:
                         c2 = self.codewords[-2]["c"]
                         e2 = c2.get_edges()
                         dotted_edges = np.array(list(e2.difference(e1)), dtype=int)
-                        circled_vertices = np.where(c.w != c2.w)
+                        circled_vertices = np.where(c.w != c2.w)[0]
                     c.draw(diam, np.array([x_offset, y_offset+dy]), {
                         "bold_idxs":set([1]),
                         "circled_vertices": circled_vertices,
@@ -271,7 +389,7 @@ class Associahedron:
             n_items += ni
             y_offset -= diam*1.5*ni
         y2 = y_offset + 1.4*diam/2
-        x1 = x_offset - 1.4*diam/2
+        x1 = x_offset - 1.5*diam/2
         x2 = x1 + 1.5*diam
         if d == 1:
             x2 += 0.1*n*diam
@@ -305,35 +423,94 @@ def make_n_stack():
 
 
 def non_rotation_example():
-    ## Fails check 2 only
+    ## Passes check 1 but fails check 2
     #c1 = Codeword([1, 1, 0, 2, 1, 0])
     #c2 = Codeword([1, 0, 1, 2, 1, 0])
     
-    c1 = Codeword([2, 0, 0, 1, 1, 1])
-    c2 = Codeword([2, 1, 0, 0, 1, 1])
+    #c1 = Codeword([2, 0, 0, 1, 1, 1])
+    #c2 = Codeword([2, 1, 0, 0, 1, 1])
     
+    #c1 = Codeword([1, 3, 0, 0, 1, 0])
+    #c2 = Codeword([1, 2, 0, 0, 2, 0])
+    
+    #c1 = Codeword([1, 1, 3, 0, 0, 0])
+    #c2 = Codeword([1, 1, 2, 0, 0, 1])
+
+    ## Fails check 1 but passes check 2
+    #c1 = Codeword([0, 1, 1, 1, 1, 1])
+    #c2 = Codeword([1, 1, 1, 1, 0, 1])
+
+    ## Fails both checks
+    #c1 = Codeword([3, 1, 0, 0, 1, 0])
+    #c2 = Codeword([3, 0, 0, 0, 1, 1])
+
+    ## Passes both checks
+    c1 = Codeword([0, 5, 0, 0, 0, 0])
+    c2 = Codeword([0, 4, 0, 0, 0, 1])
+
+    circled_vertices = np.where(c1.w != c2.w)[0]
+    e1 = c1.get_edges()
+    e2 = c2.get_edges()
+    dotted_edges = np.array(list(e1.difference(e2)), dtype=int)
     plt.figure(figsize=(6, 6))
-    c1.draw(1, np.array([0, 0]), {"color":"C0"})
-    c1.draw(1, np.array([0, -1.5]), {"color":"C0"})
-    c2.draw(1, np.array([0, 0]), {"color":"C1"})
-    c2.draw(1, np.array([1.5, 0]), {"color":"C1"})
+    c1.draw(1, np.array([0, 0]), {"color":"C0", "circled_vertices":circled_vertices})
+    c2.draw(1, np.array([1.5, 0]), {"color":"C1", "circled_vertices":circled_vertices, "dotted_edges":dotted_edges, "dotted_color":"C0"})
     plt.axis("equal")
     plt.savefig("RotExample.svg", bbox_inches='tight')
 
-make_octagon_stack()
+def quantify_extremes():
+    plt.figure(figsize=(12, 3))
+    c1 = Codeword([0, 4, 0, 0, 1, 0])
+    n1 = c1.get_num_extreme()
+    c1b = Codeword([0, 3, 0, 0, 2, 0])
+    n1b = c1b.get_num_extreme()
+
+    c2 = Codeword([0, 4, 0, 1, 0, 0])
+    n2 = c2.get_num_extreme()
+    c2b = Codeword([0, 5, 0, 0, 0, 0])
+    n2b = c2b.get_num_extreme()
+
+    dx = -0.25
+    x = 0
+    c1.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n1+1), "bold_color":"C0", "circled_vertices":[4]})
+    s = ",".join([str(i) for i in range(1, n1+1)])
+    plt.text(x+dx-0.025*n1, 0.7, "{}-extreme".format(s))
+    
+    x += 1.7
+    c1b.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n1b+1), "bold_color":"C0"})
+    s = ",".join([str(i) for i in range(1, n1b+1)])
+    plt.text(x+dx-0.025*n1b, 0.7, "{}-extreme".format(s))
+    
+    x += 1.7
+    c2.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n2+1), "bold_color":"C0", "circled_vertices":[2]})
+    s = ",".join([str(i) for i in range(1, n2+1)])
+    plt.text(x+dx-0.025*n2, 0.7, "{}-extreme".format(s))
+
+    x += 1.7
+    c2b.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n2b+1), "bold_color":"C0"})
+    s = ",".join([str(i) for i in range(1, n2b+1)])
+    plt.text(x+dx-0.025*n2b, 0.7, "{}-extreme".format(s))
+    plt.axis("equal")
+    plt.savefig("Extreme.svg", bbox_inches='tight')
+
+def draw_tree():
+    c = Codeword([0, 1, 2, 2, 0, 0])
+    T = c.get_tris()
+    root = c.get_tree()
+
+    plt.subplot(121)
+    c.draw(1, np.array([0, 0]), {"draw_index":True})
+    for ijk in T:
+        x = np.mean(c.X[ijk, :], axis=0)
+        plt.scatter(x[0], x[1])
+    plt.subplot(122)
+    draw_tree(root)
+    plt.show()
+
+#make_octagon_stack()
 #make_n_stack()
     
 #non_rotation_example()
-    
-"""
-c = Codeword([0, 1, 2, 2, 0, 0])
-c.draw(1, np.array([0, 0]))
-T = c.get_triangles()
-print(T)
-for ijk in T:
-    idx = np.array(list(ijk), dtype=int)
-    x = np.mean(c.X[ijk, :], axis=0)
-    plt.scatter(x[0], x[1])
-plt.show()
-"""
+#quantify_extremes()
 
+draw_tree()
