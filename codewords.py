@@ -16,17 +16,17 @@ class Node:
         
     def draw(self, opts, depth=0):
         from utils import draw_curve
-        xoff, xfac, yoff, yfac = opts["xoff"], opts["xfac"], opts["yoff"], opts["yfac"]
-        x1 = xoff + self.x*xfac
-        y1 = yoff - yfac*depth
-        y2 = yoff - yfac*(depth+1)
-        plt.scatter(x1, y1, c='k')
+        x_offset, dx, y_offset, dy = opts["x_offset"], opts["dx"], opts["y_offset"], opts["dy"]
+        x1 = x_offset + self.x*dx
+        y1 = y_offset - dy*depth
+        y2 = y_offset - dy*(depth+1)
+        plt.scatter(x1, y1, c='k', zorder=101)
         if self.left:
-            x2 = xoff + self.left.x*xfac
+            x2 = x_offset + self.left.x*dx
             draw_curve([x1, y1], [x2, y2])
             self.left.draw(opts, depth+1)
         if self.right:
-            x2 = xoff + self.right.x*xfac
+            x2 = x_offset + self.right.x*dx
             draw_curve([x1, y1], [x2, y2])
             self.right.draw(opts, depth+1)
 
@@ -54,14 +54,14 @@ class HEdge:
 def draw_tree(root, opts=None):
     if not opts:
         opts = {}
-    if not "xoff" in opts:
-        opts["xoff"] = 0
-    if not "xfac" in opts:
-        opts["xfac"] = 1
-    if not "yoff" in opts:
-        opts["yoff"] = 0
-    if not "yfac" in opts:
-        opts["yfac"] = 1
+    if not "x_offset" in opts:
+        opts["x_offset"] = 0
+    if not "dx" in opts:
+        opts["dx"] = 1
+    if not "y_offset" in opts:
+        opts["y_offset"] = 0
+    if not "dy" in opts:
+        opts["dy"] = 1
     x = [0]
     root.inorder(x)
     root.draw(opts, 0)
@@ -171,24 +171,20 @@ class Codeword:
     
     def get_tris(self):
         """
-        A semi-elegant method to get all of the unique triangles
+        A quick n' dirty O(N^3) method to extract triangles from an edge list
         """
-        N = len(self.w)
+        N = len(self.w)+2
         edges = self.get_edges()
-        v2edge = {i:set([]) for i in range(N+2)}
-        for [i, j] in edges:
-            v2edge[i].add(j)
-            v2edge[j].add(i)
-        for i in v2edge:
-            v2edge[i] = sorted(list(v2edge[i]))
-        for i in v2edge:
-            v2edge[i] = [(i+1)%(N+2)] + v2edge[i] + [(i+N+1)%(N+2)]
-        tris = set([])
-        for i in v2edge:
-            js = v2edge[i]
-            for k in range(1, len(js)):
-                tri = tuple(sorted([js[k-1], i, js[k]]))
-                tris.add(tri)
+        edges.add((0, N-1))
+        for i in range(N-1):
+            edges.add((i, i+1))
+        tris = []
+        for i in range(N):
+            for j in range(N+1):
+                if (i, j) in edges:
+                    for k in range(N+2):
+                        if (j, k) in edges and (i, k) in edges:
+                            tris.append((i, j, k))
         return tris
 
     def get_tree(self):
@@ -214,7 +210,6 @@ class Codeword:
                 e2 = (ijk[(x+1)%3], ijk[x])
                 if e2 in hedges:
                     hedges[e1].pair_other(hedges[e2])
-        print(hedges.keys())
         return hedges[(N+1, 0)].get_tree()
 
     def draw(self, d, c, options=None):
@@ -325,6 +320,8 @@ class Associahedron:
             opts["g_x_offset"] = 0
         if not "g_y_offset" in opts:
             opts["g_y_offset"] = 0
+        if not "draw_tree" in opts:
+            opts["draw_tree"] = False
         w = np.zeros(n, dtype=int)
         self.stack_index = np.zeros(n, dtype=int)
         self.codewords = []
@@ -375,6 +372,9 @@ class Associahedron:
                     })
                     s = "".join([str(u) for u in wi])
                     plt.text(x_offset+1.2*diam/2, y_offset+dy, s, va="center")
+                    if opts["draw_tree"]:
+                        root = c.get_tree()
+                        draw_tree(root, {"x_offset":x_offset+diam*1.2, "y_offset":y_offset+0.35*diam, "dx":diam/(2*n+1), "dy":diam/(n+1)})
 
             else:
                 if draw:
@@ -393,6 +393,8 @@ class Associahedron:
         x2 = x1 + 1.5*diam
         if d == 1:
             x2 += 0.1*n*diam
+            if opts["draw_tree"]:
+                x2 += diam*1.2 # Make room for tree
         if draw:
             xbox = [x1, x1, x2, x2, x1]
             ybox = [y1, y2, y2, y1, y1]
@@ -407,16 +409,16 @@ def make_octagon_stack():
     As an example, make a stack of octagons
     """
     plt.figure(figsize=(20, 400))
-    a6 = Associahedron(6, draw=True)
+    a6 = Associahedron(6, {"draw_tree":True}, draw=True)
     plt.axis("equal")
     plt.savefig("octagonstack.svg", bbox_inches='tight')    
 
 def make_n_stack():
     fac = 1
     plt.figure(figsize=(fac*20, fac*32)) #*42/14
-    a2 = Associahedron(2, draw=True)
-    a3 = Associahedron(3, {"g_y_offset":-14}, draw=True)
-    a4 = Associahedron(4, {"g_x_offset":5}, draw=True)
+    a2 = Associahedron(2, {"draw_tree":True}, draw=True)
+    a3 = Associahedron(3, {"g_y_offset":-14, "draw_tree":True}, draw=True)
+    a4 = Associahedron(4, {"g_x_offset":5, "draw_tree":True}, draw=True)
     
     plt.axis("equal")
     plt.savefig("stacks.svg", bbox_inches='tight')    
@@ -493,10 +495,10 @@ def quantify_extremes():
     plt.axis("equal")
     plt.savefig("Extreme.svg", bbox_inches='tight')
 
-def draw_tree():
-    c = Codeword([0, 1, 2, 2, 0, 0])
+def tree_example():
+    c = Codeword([1, 0, 4, 0, 0, 0])
     T = c.get_tris()
-    root = c.get_tree()
+    print(T)
 
     plt.subplot(121)
     c.draw(1, np.array([0, 0]), {"draw_index":True})
@@ -504,13 +506,14 @@ def draw_tree():
         x = np.mean(c.X[ijk, :], axis=0)
         plt.scatter(x[0], x[1])
     plt.subplot(122)
+    root = c.get_tree()
     draw_tree(root)
     plt.show()
 
 #make_octagon_stack()
-#make_n_stack()
+make_n_stack()
     
 #non_rotation_example()
 #quantify_extremes()
 
-draw_tree()
+#tree_example()

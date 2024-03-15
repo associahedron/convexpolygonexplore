@@ -32,7 +32,7 @@ def poly_fit(X, xs, do_plot = False):
         plt.show()
     return Y
 
-def draw_curve(X, Y, linewidth=1, color='k'):
+def draw_curve(X, Y, linewidth=2, color='k'):
     """
     Draw a parabolic curve between two 2D points
     Parameters
