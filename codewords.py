@@ -324,6 +324,7 @@ class Associahedron:
         w = np.zeros(n, dtype=int)
         self.stack_index = np.zeros(n, dtype=int)
         self.codewords = []
+        self.codeword_obj = {}
         self.last_codeword = None
         self.make_stack_rec(w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, ax)
 
@@ -339,10 +340,10 @@ class Associahedron:
         y1 = y_offset+1.4*diam/2
         n_items = 0
         vals = list(range(h))
-        stackorder = np.array(self.stack_index, dtype=int)
         if self.stack_index[d]%2 == 1:
             vals = reversed(vals)
         self.stack_index[d] += 1
+        stackorder = np.array(self.stack_index, dtype=int)
         for val in vals:
             wi = np.array(w)
             wi[d] = val
@@ -357,6 +358,7 @@ class Associahedron:
                     x=x_offset,
                     y=y_offset
                 ))
+                self.codeword_obj[tuple(wi)] = self.codewords[-1]
                 if ax:
                     dotted_edges = []
                     circled_vertices = []
