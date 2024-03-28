@@ -323,8 +323,7 @@ class Associahedron:
             opts["draw_tree"] = False
         w = np.zeros(n, dtype=int)
         self.stack_index = np.zeros(n, dtype=int)
-        self.codewords = {}
-        self.stackorder = []
+        self.codewords = []
         self.last_codeword = None
         self.make_stack_rec(w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, ax)
 
@@ -340,7 +339,7 @@ class Associahedron:
         y1 = y_offset+1.4*diam/2
         n_items = 0
         vals = list(range(h))
-        self.stackorder.append(np.array(self.stack_index, dtype=int))
+        stackorder = np.array(self.stack_index, dtype=int)
         if self.stack_index[d]%2 == 1:
             vals = reversed(vals)
         self.stack_index[d] += 1
@@ -352,11 +351,12 @@ class Associahedron:
                 wi[0] = n-1-np.sum(wi[1:])
                 ni = 1
                 c = Codeword(wi)
-                self.codewords[tuple(wi)] = dict(
+                self.codewords.append(dict(
                     c=c,
+                    s=stackorder,
                     x=x_offset,
                     y=y_offset
-                )
+                ))
                 if ax:
                     dotted_edges = []
                     circled_vertices = []
