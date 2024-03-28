@@ -14,21 +14,21 @@ class Node:
         if self.right:
             self.right.inorder(x)
         
-    def draw(self, opts, depth=0):
+    def draw(self, ax, opts, depth=0):
         from utils import draw_curve
         x_offset, dx, y_offset, dy = opts["x_offset"], opts["dx"], opts["y_offset"], opts["dy"]
         x1 = x_offset + self.x*dx
         y1 = y_offset - dy*depth
         y2 = y_offset - dy*(depth+1)
-        plt.scatter(x1, y1, c='k', zorder=101)
+        ax.scatter(x1, y1, c='k', zorder=101)
         if self.left:
             x2 = x_offset + self.left.x*dx
             draw_curve([x1, y1], [x2, y2])
-            self.left.draw(opts, depth+1)
+            self.left.draw(ax, opts, depth+1)
         if self.right:
             x2 = x_offset + self.right.x*dx
             draw_curve([x1, y1], [x2, y2])
-            self.right.draw(opts, depth+1)
+            self.right.draw(ax, opts, depth+1)
 
 class HEdge:
     def __init__(self):
@@ -51,7 +51,7 @@ class HEdge:
             root.right = Node() # Leaf node
         return root
     
-def draw_tree(root, opts=None):
+def draw_tree(ax, root, opts=None):
     if not opts:
         opts = {}
     if not "x_offset" in opts:
@@ -64,7 +64,7 @@ def draw_tree(root, opts=None):
         opts["dy"] = 1
     x = [0]
     root.inorder(x)
-    root.draw(opts, 0)
+    root.draw(ax, opts, 0)
 
 
 def are_rotation_neighbors(w1, w2):
@@ -212,7 +212,7 @@ class Codeword:
                     hedges[e1].pair_other(hedges[e2])
         return hedges[(N+1, 0)].get_tree()
 
-    def draw(self, d, c, options=None):
+    def draw(self, ax, d, c, options=None):
         """
         Parameters
         ----------
@@ -275,7 +275,7 @@ class Codeword:
         XTheta = np.array(X)
         XTheta[:, 0] += r*0.2*np.cos(theta)
         XTheta[:, 1] += r*0.2*np.sin(theta)
-        plt.scatter(X[:, 0], X[:, 1], c=options["color"], zorder=100) 
+        ax.scatter(X[:, 0], X[:, 1], c=options["color"], zorder=100) 
         rg = N
         if options["draw_index"]:
             rg = N+2
@@ -290,28 +290,27 @@ class Codeword:
                     val = i
                     if not options["draw_index"]:
                         val = w[i]
-                    plt.text(XTheta[i, 0], XTheta[i, 1], "{}".format(val), c=c, ha="center", va="center", weight=weight)
+                    ax.text(XTheta[i, 0], XTheta[i, 1], "{}".format(val), c=c, ha="center", va="center", weight=weight)
         X = np.concatenate((X, X[0, :][None, :]), axis=0)
-        plt.plot(X[:, 0], X[:, 1], c=options["color"])
+        ax.plot(X[:, 0], X[:, 1], c=options["color"])
 
         ## Step 2: Draw polygon edges
         w = np.concatenate((w, np.array([0, 0])))
         i = N-1
         for (i, j) in self.get_edges(min_idx):
-            plt.plot(X[[i, j], 0], X[[i, j], 1], c=options["color"])
-        plt.axis("off")
+            ax.plot(X[[i, j], 0], X[[i, j], 1], c=options["color"])
 
         ## Step 3: Circle any vertices
         for idx in options["circled_vertices"]:
-            plt.scatter(XTheta[idx, 0], XTheta[idx, 1], s=200, facecolors='none', edgecolors='C3', zorder=101)
+            ax.scatter(XTheta[idx, 0], XTheta[idx, 1], s=200, facecolors='none', edgecolors='C3', zorder=101)
 
         ## Step 4: Draw any dotted edges
         for [i, j] in options["dotted_edges"]:
-            plt.plot(X[[i, j], 0], X[[i, j], 1], c=options["dotted_color"], linestyle='--')
+            ax.plot(X[[i, j], 0], X[[i, j], 1], c=options["dotted_color"], linestyle='--')
 
 
 class Associahedron:
-    def __init__(self, n, opts=None, draw=True):
+    def __init__(self, n, opts=None, ax=None):
         if not opts:
             opts = {}
         if not "diameter" in opts:
@@ -324,21 +323,24 @@ class Associahedron:
             opts["draw_tree"] = False
         w = np.zeros(n, dtype=int)
         self.stack_index = np.zeros(n, dtype=int)
-        self.codewords = []
-        self.make_stack_rec(w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, draw)
+        self.codewords = {}
+        self.stackorder = []
+        self.last_codeword = None
+        self.make_stack_rec(w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, ax)
 
 
-    def make_stack_rec(self, w, d, g_x_offset, y_offset, opts, draw=True):
+    def make_stack_rec(self, w, d, g_x_offset, y_offset, opts, ax=None):
         n = w.size
         diam = opts["diameter"]
         dy = -0.1*diam
         h = w.size-d-np.sum(w[d+1:])+1
-        x_offset = g_x_offset + 1.5*diam*(n-d-1)
-        if draw:
-            plt.text(x_offset, y_offset+1.2*diam/2, "d = {}, h = {}".format(d, h), ha="center", va="center")
+        x_offset = g_x_offset - 1.5*diam*(n-d-1)
+        if ax:
+            ax.text(x_offset, y_offset+1.2*diam/2, "d = {}, h = {}".format(d, h), ha="center", va="center")
         y1 = y_offset+1.4*diam/2
         n_items = 0
         vals = list(range(h))
+        self.stackorder.append(np.array(self.stack_index, dtype=int))
         if self.stack_index[d]%2 == 1:
             vals = reversed(vals)
         self.stack_index[d] += 1
@@ -350,57 +352,57 @@ class Associahedron:
                 wi[0] = n-1-np.sum(wi[1:])
                 ni = 1
                 c = Codeword(wi)
-                self.codewords.append(dict(
+                self.codewords[tuple(wi)] = dict(
                     c=c,
                     x=x_offset,
                     y=y_offset
-                ))
-                if draw:
+                )
+                if ax:
                     dotted_edges = []
                     circled_vertices = []
                     if len(self.codewords) > 1:
                         # Indicate quad where flip happened
                         e1 = c.get_edges()
-                        c2 = self.codewords[-2]["c"]
+                        c2 = self.last_codeword
                         e2 = c2.get_edges()
                         dotted_edges = np.array(list(e2.difference(e1)), dtype=int)
                         circled_vertices = np.where(c.w != c2.w)[0]
-                    c.draw(diam, np.array([x_offset, y_offset+dy]), {
+                    c.draw(ax, diam, np.array([x_offset, y_offset+dy]), {
                         "bold_idxs":set([1]),
                         "circled_vertices": circled_vertices,
                         "dotted_edges":dotted_edges
                     })
                     s = "".join([str(u) for u in wi])
-                    plt.text(x_offset+1.2*diam/2, y_offset+dy, s, va="center")
+                    ax.text(x_offset-2*diam-n*0.07, y_offset+dy, s, va="center")
                     if opts["draw_tree"]:
                         root = c.get_tree()
-                        draw_tree(root, {"x_offset":x_offset+diam*1.2, "y_offset":y_offset+0.35*diam, "dx":diam/(2*n+1), "dy":diam/(n+1)})
-
+                        draw_tree(ax, root, {"x_offset":x_offset-diam*1.7, "y_offset":y_offset+0.35*diam, "dx":diam/(2*n+1), "dy":diam/(n+1)})
+                self.last_codeword = c
             else:
-                if draw:
+                if ax:
                     c = Codeword(wi)
-                    c.draw(diam, np.array([x_offset, y_offset+dy]), {
+                    c.draw(ax, diam, np.array([x_offset, y_offset+dy]), {
                         "min_idx":d,
                         "bold_idxs":set([d])
                     })
                     s = "".join([str(u) for u in wi[d:]])
-                    plt.text(x_offset, y_offset+diam/3.2+dy, s, ha="center", va="center")
-                ni = self.make_stack_rec(wi, d-1, g_x_offset, y_offset, opts, draw)
+                    ax.text(x_offset, y_offset+diam/3.2+dy, s, ha="center", va="center")
+                ni = self.make_stack_rec(wi, d-1, g_x_offset, y_offset, opts, ax)
             n_items += ni
             y_offset -= diam*1.5*ni
         y2 = y_offset + 1.4*diam/2
         x1 = x_offset - 1.5*diam/2
         x2 = x1 + 1.5*diam
         if d == 1:
-            x2 += 0.1*n*diam
+            x1 -= 0.1*n*diam
             if opts["draw_tree"]:
-                x2 += diam*1.2 # Make room for tree
-        if draw:
+                x1 -= diam*1.2 # Make room for tree
+        if ax:
             xbox = [x1, x1, x2, x2, x1]
             ybox = [y1, y2, y2, y1, y1]
-            plt.plot(xbox, ybox, c='k')
+            ax.plot(xbox, ybox, c='k')
             if self.stack_index[d]%2 == 0:
-                plt.fill(xbox, ybox, c=[0.9]*3)
+                ax.fill(xbox, ybox, c=[0.9]*3)
         return n_items
 
 
@@ -409,16 +411,18 @@ def make_octagon_stack():
     As an example, make a stack of octagons
     """
     plt.figure(figsize=(20, 400))
-    a6 = Associahedron(6, {"draw_tree":True}, draw=True)
+    ax = plt.subplot(111)
+    a6 = Associahedron(6, {"draw_tree":True}, ax=ax)
     plt.axis("equal")
     plt.savefig("octagonstack.svg", bbox_inches='tight')    
 
 def make_n_stack():
     fac = 1
     plt.figure(figsize=(fac*20, fac*32)) #*42/14
-    a2 = Associahedron(2, {"draw_tree":True}, draw=True)
-    a3 = Associahedron(3, {"g_y_offset":-14, "draw_tree":True}, draw=True)
-    a4 = Associahedron(4, {"g_x_offset":5, "draw_tree":True}, draw=True)
+    ax = plt.subplot(111)
+    a2 = Associahedron(2, {"draw_tree":True}, ax=ax)
+    a3 = Associahedron(3, {"g_y_offset":-14, "draw_tree":True}, ax=ax)
+    a4 = Associahedron(4, {"g_x_offset":5, "draw_tree":True}, ax=ax)
     
     plt.axis("equal")
     plt.savefig("stacks.svg", bbox_inches='tight')    
@@ -454,14 +458,14 @@ def non_rotation_example():
     e1 = c1.get_edges()
     e2 = c2.get_edges()
     dotted_edges = np.array(list(e1.difference(e2)), dtype=int)
-    plt.figure(figsize=(6, 6))
-    c1.draw(1, np.array([0, 0]), {"color":"C0", "circled_vertices":circled_vertices})
-    c2.draw(1, np.array([1.5, 0]), {"color":"C1", "circled_vertices":circled_vertices, "dotted_edges":dotted_edges, "dotted_color":"C0"})
+    ax = plt.figure(figsize=(6, 6))
+    c1.draw(ax, 1, np.array([0, 0]), {"color":"C0", "circled_vertices":circled_vertices})
+    c2.draw(ax, 1, np.array([1.5, 0]), {"color":"C1", "circled_vertices":circled_vertices, "dotted_edges":dotted_edges, "dotted_color":"C0"})
     plt.axis("equal")
     plt.savefig("RotExample.svg", bbox_inches='tight')
 
 def quantify_extremes():
-    plt.figure(figsize=(12, 3))
+    ax = plt.figure(figsize=(12, 3))
     c1 = Codeword([0, 4, 0, 0, 1, 0])
     n1 = c1.get_num_extreme()
     c1b = Codeword([0, 3, 0, 0, 2, 0])
@@ -474,22 +478,22 @@ def quantify_extremes():
 
     dx = -0.25
     x = 0
-    c1.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n1+1), "bold_color":"C0", "circled_vertices":[4]})
+    c1.draw(ax, 1, np.array([x, 0]), {"bold_idxs":np.arange(1, n1+1), "bold_color":"C0", "circled_vertices":[4]})
     s = ",".join([str(i) for i in range(1, n1+1)])
     plt.text(x+dx-0.025*n1, 0.7, "{}-extreme".format(s))
     
     x += 1.7
-    c1b.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n1b+1), "bold_color":"C0"})
+    c1b.draw(ax, 1, np.array([x, 0]), {"bold_idxs":np.arange(1, n1b+1), "bold_color":"C0"})
     s = ",".join([str(i) for i in range(1, n1b+1)])
     plt.text(x+dx-0.025*n1b, 0.7, "{}-extreme".format(s))
     
     x += 1.7
-    c2.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n2+1), "bold_color":"C0", "circled_vertices":[2]})
+    c2.draw(ax, 1, np.array([x, 0]), {"bold_idxs":np.arange(1, n2+1), "bold_color":"C0", "circled_vertices":[2]})
     s = ",".join([str(i) for i in range(1, n2+1)])
     plt.text(x+dx-0.025*n2, 0.7, "{}-extreme".format(s))
 
     x += 1.7
-    c2b.draw(1, np.array([x, 0]), {"bold_idxs":np.arange(1, n2b+1), "bold_color":"C0"})
+    c2b.draw(ax, 1, np.array([x, 0]), {"bold_idxs":np.arange(1, n2b+1), "bold_color":"C0"})
     s = ",".join([str(i) for i in range(1, n2b+1)])
     plt.text(x+dx-0.025*n2b, 0.7, "{}-extreme".format(s))
     plt.axis("equal")
@@ -500,8 +504,8 @@ def tree_example():
     T = c.get_tris()
     print(T)
 
-    plt.subplot(121)
-    c.draw(1, np.array([0, 0]), {"draw_index":True})
+    ax = plt.subplot(121)
+    c.draw(ax, 1, np.array([0, 0]), {"draw_index":True})
     for ijk in T:
         x = np.mean(c.X[ijk, :], axis=0)
         plt.scatter(x[0], x[1])
@@ -510,10 +514,11 @@ def tree_example():
     draw_tree(root)
     plt.show()
 
-#make_octagon_stack()
-make_n_stack()
-    
-#non_rotation_example()
-#quantify_extremes()
+if __name__ == '__main__':
+    make_octagon_stack()
+    #make_n_stack()
+        
+    #non_rotation_example()
+    #quantify_extremes()
 
-#tree_example()
+    #tree_example()
