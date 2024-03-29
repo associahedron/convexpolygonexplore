@@ -19,8 +19,9 @@ class Canvas2D {
 		this.canvas.selectAll("*").remove();
 
 		let g = this.canvas.append("g").attr("class", "poly1");
-		let c = new Codeword([0, 2, 1, 0]);
-		c.draw(g, 100, [100, 100]);
+		//let c = new Codeword([0, 2, 1, 0]);
+		//c.draw(g, 100, [100, 100]);
+		let a = new Associahedron(4, {"diameter":100}, g);
 	}
 	/*updateGodzillaLine() {
 		let Ps = this.getGodzillaLine();

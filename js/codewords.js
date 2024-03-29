@@ -1,6 +1,59 @@
+/**
+ * Sum up all of the elements of the array starting
+ * at index i
+ * @param {list} arr Array
+ * @param {int} idx Start index
+ */
+function arrsum(arr, idx) {
+    let res = 0;
+    for (let i = idx; i < arr.length; i++) {
+        res += arr[i];
+    }
+    return res;
+}
+
+/**
+ * Make a comma separated string out of an array
+ * 
+ * @param {list} arr Array
+ * @param {str} sep Separator
+ */
+function arrstr(arr, sep) {
+    let s = "";
+    if (sep == undefined) {
+        sep = ""
+    }
+    for (let i = 0; i < arr.length; i++) {
+        s += arr[i];
+        if (i < arr.length-1) {
+            s += sep;
+        }
+    }
+    return s;
+}
+
+/**
+ * Search for an array in an array of arrays
+ * @param {array of arrays} arr Array of arrays
+ * @param {array} inarr Array we're searching for
+ */
+function arrInArr(arr, inarr) {
+    let found = false;
+    for (let i = 0; i < arr.length; i++) {
+        let equals = (arr[i].length == inarr.length);
+        if (equals) {
+            for (let k = 0; k < arr[i].length; k++) {
+                equals = equals && (arr[i][k] == inarr[k]);
+            }
+            found = found || equals;
+        }
+    }
+    return found;
+}
+
 class Codeword {
     constructor(w) {
-        this.w = w;
+        this.w = new Int32Array(w);
     }
 
     /**
@@ -146,8 +199,6 @@ class Codeword {
 
             }
         }
-            
-        
 
         // Step 2: Draw polygon edges
         // Step 2a: Boundary edges
@@ -189,106 +240,149 @@ class Codeword {
 }
 
 
-/*
-class Associahedron:
-    def __init__(self, n, opts=None, ax=None):
-        if not opts:
-            opts = {}
-        if not "diameter" in opts:
-            opts["diameter"] = 1
-        if not "g_x_offset" in opts:
-            opts["g_x_offset"] = 0
-        if not "g_y_offset" in opts:
-            opts["g_y_offset"] = 0
-        if not "draw_tree" in opts:
-            opts["draw_tree"] = False
-        w = np.zeros(n, dtype=int)
-        self.stack_index = np.zeros(n, dtype=int)
-        self.codewords = []
-        self.codeword_obj = {}
-        self.last_codeword = None
-        self.make_stack_rec(w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, ax)
 
+class Associahedron {
+    constructor(n, opts, g) {
+        if (opts == undefined) {
+            opts = {};
+        }
+        if (!("diameter" in opts)) {
+            opts["diameter"] = 1;
+        }
+        if (!("g_x_offset" in opts)) {
+            opts["g_x_offset"] = opts["diameter"]*2*n;
+        }
+        if (!("g_y_offset" in opts)) {
+            opts["g_y_offset"] = 0;
+        }
+        this.w = new Int32Array(n);
+        this.stack_index = new Int32Array(n);
+        this.codewords = [];
+        this.last_codeword = null;
+        this.codeword_obj = {};
+        this.make_stack_rec(this.w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, g);
+    }
 
-    def make_stack_rec(self, w, d, g_x_offset, y_offset, opts, ax=None):
-        n = w.size
-        diam = opts["diameter"]
-        dy = -0.1*diam
-        h = w.size-d-np.sum(w[d+1:])+1
-        x_offset = g_x_offset - 1.5*diam*(n-d-1)
-        if ax:
-            ax.text(x_offset, y_offset+1.2*diam/2, "d = {}, h = {}".format(d, h), ha="center", va="center")
-        y1 = y_offset+1.4*diam/2
-        n_items = 0
-        vals = list(range(h))
-        if self.stack_index[d]%2 == 1:
-            vals = reversed(vals)
-        self.stack_index[d] += 1
-        stackorder = np.array(self.stack_index, dtype=int)
-        for val in vals:
-            wi = np.array(w)
-            wi[d] = val
-            if d == 1:
-                ## Base case
-                wi[0] = n-1-np.sum(wi[1:])
-                ni = 1
-                c = Codeword(wi)
-                self.codewords.append(dict(
-                    c=c,
-                    s=stackorder,
-                    x=x_offset,
-                    y=y_offset
-                ))
-                self.codeword_obj[tuple(wi)] = self.codewords[-1]
-                if ax:
-                    dotted_edges = []
-                    circled_vertices = []
-                    if len(self.codewords) > 1:
-                        # Indicate quad where flip happened
-                        e1 = c.get_edges()
-                        c2 = self.last_codeword
-                        e2 = c2.get_edges()
-                        dotted_edges = np.array(list(e2.difference(e1)), dtype=int)
-                        circled_vertices = np.where(c.w != c2.w)[0]
-                    c.draw(ax, diam, np.array([x_offset, y_offset+dy]), {
-                        "bold_idxs":set([1]),
-                        "circled_vertices": circled_vertices,
-                        "dotted_edges":dotted_edges
-                    })
-                    s = "".join([str(u) for u in wi])
-                    ax.text(x_offset-2*diam-n*0.07, y_offset+dy, s, va="center")
-                    if opts["draw_tree"]:
-                        root = c.get_tree()
-                        draw_tree(ax, root, {"x_offset":x_offset-diam*1.7, "y_offset":y_offset+0.35*diam, "dx":diam/(2*n+1), "dy":diam/(n+1)})
-                self.last_codeword = c
-            else:
-                if ax:
-                    c = Codeword(wi)
-                    c.draw(ax, diam, np.array([x_offset, y_offset+dy]), {
-                        "min_idx":d,
-                        "bold_idxs":set([d])
-                    })
-                    s = "".join([str(u) for u in wi[d:]])
-                    ax.text(x_offset, y_offset+diam/3.2+dy, s, ha="center", va="center")
-                ni = self.make_stack_rec(wi, d-1, g_x_offset, y_offset, opts, ax)
-            n_items += ni
-            y_offset -= diam*1.5*ni
-        y2 = y_offset + 1.4*diam/2
-        x1 = x_offset - 1.5*diam/2
-        x2 = x1 + 1.5*diam
-        if d == 1:
-            x1 -= 0.1*n*diam
-            if opts["draw_tree"]:
-                x1 -= diam*1.2 # Make room for tree
-        if ax:
-            xbox = [x1, x1, x2, x2, x1]
-            ybox = [y1, y2, y2, y1, y1]
+    make_stack_rec(w, d, g_x_offset, y_offset, opts, g) {
+        console.log("w", w);
+        console.log("d", d);
+        const n = w.length;
+        const diam = opts["diameter"];
+        let dy = -0.1*diam;
+        let h = w.length-d-arrsum(w, d+1)+1;
+        console.log("h", h);
+        let x_offset = g_x_offset - 1.5*diam*(n-d-1);
+        g.append("text")
+        .attr("x", x_offset)
+        .attr("y", y_offset)
+        .attr("text-anchor", "middle")
+        .text("d = " + d + ", h = " + h);
+        let y1 = y_offset+1.4*diam/2;
+        let n_items = 0;
+        let vals = [];
+        if (this.stack_index[d]%2 == 0) {
+            vals = (new Int32Array(h)).map((_, idx) => idx);
+        }
+        else {
+            vals = (new Int32Array(h)).map((_, idx) => h-idx-1);            
+        }
+        console.log("vals", vals);
+        this.stack_index[d] += 1;
+        const stackorder = new Int32Array(this.stack_index);
+        for (let ival = 0; ival < vals.length; ival++) {
+            let val = vals[ival];
+            let wi = new Int32Array(w);
+            wi[d] = val;
+            console.log(arrstr(wi, ","));
+            let ni = 0;
+            if (d == 1) {
+                // Base case
+                wi[0] = n-1-arrsum(wi, 1);
+                ni = 1;
+                let c = new Codeword(wi);
+                this.codewords.push({
+                    "c":c, 
+                    "s":stackorder,
+                    "x":x_offset,
+                    "y":y_offset
+                });
+                this.codeword_obj[arrstr(wi, ",")] = this.codewords[this.codewords.length-1];
+                
+                let dotted_edges = [];
+                let circled_vertices = [];
+                if (this.codewords.length > 1) {
+                    // Indicate quad where flip happened
+                    let e1 = c.get_edges();
+                    let c2 = this.last_codeword;
+                    if (!(c2 === null)) {
+                        let e2 = c2.get_edges();
+                        let dotted_edges = [];
+                        for (let k = 0; k < e1.length; k++) {
+                            if (!arrInArr(e2, e1[k])) {
+                                dotted_edges.push(e1[k]);
+                            }
+                        }
+                        for (let k = 0; k < e2.length; k++) {
+                            if (!arrInArr(e1, e2[k])) {
+                                dotted_edges.push(e2[k]);
+                            }
+                        }
+                        for (let k = 0; k < w.length; k++) {
+                            if (c.w[k] != c2.w[k]) {
+                                circled_vertices.push(k);
+                            }
+                        }
+                    }
+                }
+
+                c.draw(g, diam, [x_offset, y_offset+dy], {
+                    "bold_idxs":[1],
+                    "circled_vertices":circled_vertices,
+                    "dotted_edges":dotted_edges
+                });
+                g.append("text")
+                .attr("x", x_offset-2*diam-n*0.07)
+                .attr("y", y_offset+dy)
+                .attr("text-anchor", "middle")
+                .text(arrstr(wi));
+            }
+            else {
+                let c = new Codeword(wi);
+                c.draw(g, diam, [x_offset, y_offset+dy], {
+                    "min_idx":d,
+                    "bold_idxs":[d]
+                });
+                let s = "";
+                for (let k = d; k < wi.length; k++) {
+                    s += wi[d];
+                }
+                g.append("text")
+                .attr("x", x_offset)
+                .attr("y", y_offset-diam/3.2+dy)
+                .attr("text-anchor", "middle")
+                .text(s);
+                ni = this.make_stack_rec(wi, d-1, g_x_offset, y_offset, opts, g);
+            }
+            n_items += ni;
+            y_offset += diam*1.5*ni
+        }
+        let y2 = y_offset - 1.4*diam/2;
+        let x1 = x_offset - 1.5*diam/2
+        let x2 = x1 + 1.5*diam;
+        if (d == 1) {
+            x1 -= 0.1*n*diam;
+        }
+
+        /*let xbox = [x1, x1, x2, x2, x1]
+        let ybox = [y1, y2, y2, y1, y1]
             ax.plot(xbox, ybox, c='k')
             if self.stack_index[d]%2 == 0:
-                ax.fill(xbox, ybox, c=[0.9]*3)
+                ax.fill(xbox, ybox, c=[0.9]*3)*/
         return n_items
+    }
 
-
+}
+/*
 def make_octagon_stack():
     """
     As an example, make a stack of octagons
