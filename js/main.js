@@ -1,0 +1,1 @@
+let c = new Canvas2D();
