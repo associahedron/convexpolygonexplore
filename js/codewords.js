@@ -272,6 +272,8 @@ class Associahedron {
         {
             "diameter": How big each polygon is,
             "g_x_offset": Global x offset
+            "g_y_offset": Global y offset
+            "show_circle": Whether to show the dotted circle around where we are
         }
      * @param {string} domStr ID of the DOM element to fill with this
      */
@@ -280,21 +282,26 @@ class Associahedron {
             opts = {};
         }
         if (!("diameter" in opts)) {
-            opts["diameter"] = 1;
+            opts["diameter"] = 100;
         }
         if (!("g_x_offset" in opts)) {
             opts["g_x_offset"] = opts["diameter"]*n*1.5;
         }
         if (!("g_y_offset" in opts)) {
-            opts["g_y_offset"] = 20;
+            opts["g_y_offset"] = 40;
         }
+        if (!("show_circle" in opts)) {
+            opts["show_circle"] = false;
+        }
+        this.n = n;
+        const diam = opts["diameter"];
+        this.diam = diam;
         this.g_x_offset = opts["g_x_offset"];
         this.g_y_offset = opts["g_y_offset"];
 		const container = document.getElementById(domStr);
 		container.addEventListener("contextmenu", e => e.preventDefault());
 		this.width = window.innerWidth * 0.9;
 		this.height = window.innerHeight * 0.9;
-		document.getElementById("info").width = this.width;
 		this.container = container;
 		this.canvas = d3.select("#"+domStr)
 		.append("svg")
@@ -311,12 +318,75 @@ class Associahedron {
 		this.xoffset = 0;
 		this.yoffset = 0;
 
+        if (opts["show_circle"]) {
+            const cg = this.canvas.append("g");
+            cg.append("circle")
+            .attr("r", 0.9*diam)
+            .attr("fill", "none")
+            .attr("stroke", "black")
+            .attr("stroke-width", 3)
+            .style("stroke-dasharray", "10, 5")
+            .attr("cx", opts["g_x_offset"]-1.5*diam*(n-2))
+            .attr("cy", opts["g_y_offset"]+diam*0.6);
+        }
+
         this.w = new Int32Array(n);
         this.stack_index = new Int32Array(n);
         this.codewords = [];
         this.last_codeword = null;
         this.codeword_obj = {};
         this.make_stack_rec(this.w, n-1, this.g_x_offset, this.g_y_offset, opts, this.g);
+        this.resetAnimation();
+    }
+
+    resetAnimation() {
+        this.animIndex = 0;
+    }
+
+    finishedAnimation() {
+        return this.animIndex >= this.codewords.length-1;
+    }
+
+    /**
+     * 
+     * @param {float} moveTime Animation timestep, in milliseconds
+     * @returns 
+     */
+    async moveToNext(moveTime) {
+        if (this.finishedAnimation()) {
+            return;
+        }
+        const c1 = this.codewords[this.animIndex];
+        const s1 = c1.s;
+        this.animIndex += 1;
+        const c2 = this.codewords[this.animIndex];
+        const s2 = c2.s;
+
+        // First check if we're jumping to a new stack
+        let newStack = false;
+        let i = s1.length-1;
+        while (i >= 0 && !newStack) {
+            if (s1[i] != s2[i]) {
+                newStack = true;
+            }
+            else {
+                i--;
+            }
+        }
+        let x = 0;
+        const y = -c2.y+0.065*this.diam*this.n;
+        if (newStack) {
+            x = -this.diam*i*1.5;
+            this.g.transition().duration(moveTime)
+            .attr("transform", "translate("+x+","+y+")");
+            await new Promise(resolve => {setTimeout(() => resolve(), moveTime)});
+            x = 0;
+        }
+
+        
+        this.g.transition().duration(moveTime)
+            .attr("transform", "translate(0,"+y+")");
+        await new Promise(resolve => {setTimeout(() => resolve(), moveTime)});
     }
 
     dragNode() {
@@ -410,7 +480,7 @@ class Associahedron {
                     "dotted_edges":dotted_edges
                 });
                 g.append("text")
-                .attr("x", x_offset-1.1*diam-n*0.07)
+                .attr("x", x_offset-diam-n*diam*0.07)
                 .attr("y", y_offset+dy)
                 .attr("text-anchor", "middle")
                 .text(arrstr(wi));
