@@ -63,6 +63,9 @@ class Codeword {
      * @returns 
      */
     get_edges(min_idx) {
+        if (min_idx === undefined) {
+            min_idx = 0;
+        }
         const w = this.w;
         const N = w.length;
         const visible = new Int32Array(N+2);
@@ -72,7 +75,6 @@ class Codeword {
         let i = N-1;
         let edges = [];
         while (i >= min_idx) {
-            console.log("i", i);
             let wi = w[i];
             let j = i+2;
             while (wi > 0) {
@@ -132,7 +134,7 @@ class Codeword {
             options["bold_idxs"] = [];
         }
         if (!("bold_color" in options)) {
-            options["bold_color"] = d3.rgb(100, 50, 6);
+            options["bold_color"] = d3.rgb(255, 128, 12);
         }
         if (!("color" in options)) {
             options["color"] = d3.rgb(0, 0, 0);
@@ -147,7 +149,7 @@ class Codeword {
             options["dotted_color"] = d3.rgb(0, 0, 0);
         }
         if (!("draw_index" in options)) {
-            options["draw_index"] = true;
+            options["draw_index"] = false;
         }
         
         // Step 1: Draw polygon boundary
@@ -166,8 +168,8 @@ class Codeword {
             const y = -r*Math.sin(theta) + c[1];
             Xx.push(x);
             Xy.push(y);
-            Tx.push(r*1.2*Math.cos(theta) + c[0]);
-            Ty.push(-r*1.2*Math.sin(theta) + c[1]);
+            Tx.push(r*1.25*Math.cos(theta) + c[0]);
+            Ty.push(-r*1.25*Math.sin(theta) + c[1]);
 			g.append("circle")
 				.attr("r", 5)
 				.attr("fill", options["color"])
@@ -193,10 +195,10 @@ class Codeword {
                         .attr("x", Tx[i])
                         .attr("y", Ty[i])
                         .attr("text-anchor", "middle")
+                        .attr("dy", 5)
                         .attr("fill", c)
-                        .text(""+val)
+                        .text(""+val);
                 }
-
             }
         }
 
@@ -215,10 +217,8 @@ class Codeword {
         const edges = this.get_edges(min_idx);
         for (let k = 0; k < edges.length; k++) {
             let e = edges[k];
-            console.log(e);
             const i = e[0];
             const j = e[1];
-            console.log(Xx[i], Xy[i])
             g.append("line")
             .attr("x1", Xx[i])
             .attr("y1", Xy[i])
@@ -229,12 +229,29 @@ class Codeword {
         }
 
         // Step 3: Circle any vertices
-        /*for idx in options["circled_vertices"]:
-            ax.scatter(XTheta[idx, 0], XTheta[idx, 1], s=200, facecolors='none', edgecolors='C3', zorder=101)
+        for (let i = 0; i < options["circled_vertices"].length; i++) {
+            let idx = options["circled_vertices"][i];
+			g.append("circle")
+            .attr("r", 10)
+            .attr("fill", "none")
+            .attr("stroke", "red")
+            .attr("cx", Tx[idx]).attr("cy", Ty[idx]);
+        }
 
-        ## Step 4: Draw any dotted edges
-        for [i, j] in options["dotted_edges"]:
-            ax.plot(X[[i, j], 0], X[[i, j], 1], c=options["dotted_color"], linestyle='--')*/
+        // Step 4: Draw any dotted edges
+        for (let idx = 0; idx < options["dotted_edges"].length; idx++) {
+            const e = options["dotted_edges"][idx];
+            const i = e[0];
+            const j = e[1];
+            g.append("line")
+            .attr("x1", Xx[i])
+            .attr("y1", Xy[i])
+            .attr("x2", Xx[j])
+            .attr("y2", Xy[j])
+            .attr("stroke", options["dotted_color"])
+            .attr("stroke-width", 1)
+            .style("stroke-dasharray", "10, 5");
+        }
 
     }
 }
@@ -264,19 +281,16 @@ class Associahedron {
     }
 
     make_stack_rec(w, d, g_x_offset, y_offset, opts, g) {
-        console.log("w", w);
-        console.log("d", d);
         const n = w.length;
         const diam = opts["diameter"];
         let dy = -0.1*diam;
         let h = w.length-d-arrsum(w, d+1)+1;
-        console.log("h", h);
         let x_offset = g_x_offset - 1.5*diam*(n-d-1);
         g.append("text")
         .attr("x", x_offset)
         .attr("y", y_offset)
         .attr("text-anchor", "middle")
-        .text("d = " + d + ", h = " + h);
+        .text("d = " + d + ", h = " + h, dy=0.65*diam);
         let y1 = y_offset+1.4*diam/2;
         let n_items = 0;
         let vals = [];
@@ -286,14 +300,12 @@ class Associahedron {
         else {
             vals = (new Int32Array(h)).map((_, idx) => h-idx-1);            
         }
-        console.log("vals", vals);
         this.stack_index[d] += 1;
         const stackorder = new Int32Array(this.stack_index);
         for (let ival = 0; ival < vals.length; ival++) {
             let val = vals[ival];
             let wi = new Int32Array(w);
             wi[d] = val;
-            console.log(arrstr(wi, ","));
             let ni = 0;
             if (d == 1) {
                 // Base case
@@ -314,27 +326,18 @@ class Associahedron {
                     // Indicate quad where flip happened
                     let e1 = c.get_edges();
                     let c2 = this.last_codeword;
-                    if (!(c2 === null)) {
-                        let e2 = c2.get_edges();
-                        let dotted_edges = [];
-                        for (let k = 0; k < e1.length; k++) {
-                            if (!arrInArr(e2, e1[k])) {
-                                dotted_edges.push(e1[k]);
-                            }
+                    let e2 = c2.get_edges();
+                    for (let k = 0; k < e2.length; k++) {
+                        if (!arrInArr(e1, e2[k])) {
+                            dotted_edges.push(e2[k]);
                         }
-                        for (let k = 0; k < e2.length; k++) {
-                            if (!arrInArr(e1, e2[k])) {
-                                dotted_edges.push(e2[k]);
-                            }
-                        }
-                        for (let k = 0; k < w.length; k++) {
-                            if (c.w[k] != c2.w[k]) {
-                                circled_vertices.push(k);
-                            }
+                    }
+                    for (let k = 0; k < w.length; k++) {
+                        if (c.w[k] != c2.w[k]) {
+                            circled_vertices.push(k);
                         }
                     }
                 }
-
                 c.draw(g, diam, [x_offset, y_offset+dy], {
                     "bold_idxs":[1],
                     "circled_vertices":circled_vertices,
@@ -345,6 +348,7 @@ class Associahedron {
                 .attr("y", y_offset+dy)
                 .attr("text-anchor", "middle")
                 .text(arrstr(wi));
+                this.last_codeword = c;
             }
             else {
                 let c = new Codeword(wi);
@@ -367,7 +371,7 @@ class Associahedron {
             y_offset += diam*1.5*ni
         }
         let y2 = y_offset - 1.4*diam/2;
-        let x1 = x_offset - 1.5*diam/2
+        let x1 = x_offset - 1.5*diam/2;
         let x2 = x1 + 1.5*diam;
         if (d == 1) {
             x1 -= 0.1*n*diam;
