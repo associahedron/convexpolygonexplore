@@ -176,7 +176,7 @@ class Codeword {
             Xy.push(y);
             Tx.push(r*1.25*Math.cos(theta) + c[0]);
             Ty.push(-r*1.25*Math.sin(theta) + c[1]);
-            if (i in options["circled_vertices"]) {
+            if (options["circled_vertices"].includes(i)) {
                 g.append("circle")
                 .attr("r", 10)
                 .attr("fill", "none")
@@ -198,8 +198,10 @@ class Codeword {
             for (let i = 0; i < rg; i++) {
                 if (i >= min_idx) {
                     let c = options["color"];
-                    if (i in options["bold_idxs"]) {
+                    let font_weight = 100;
+                    if (options["bold_idxs"].includes(i)) {
                         c = options["bold_color"];
+                        font_weight = 700;
                     }
                     let val = i;
                     if (!options["draw_index"]) {
@@ -211,6 +213,7 @@ class Codeword {
                         .attr("text-anchor", "middle")
                         .attr("dy", 5)
                         .attr("fill", c)
+                        .style("font-weight", font_weight)
                         .text(""+val);
                 }
             }
@@ -261,9 +264,18 @@ class Codeword {
 }
 
 
-
 class Associahedron {
-    constructor(n, opts, g) {
+    /**
+     * 
+     * @param {int} n 
+     * @param {object} opts 
+        {
+            "diameter": How big each polygon is,
+            "g_x_offset": Global x offset
+        }
+     * @param {string} domStr ID of the DOM element to fill with this
+     */
+    constructor(n, opts, domStr) {
         if (opts == undefined) {
             opts = {};
         }
@@ -271,18 +283,68 @@ class Associahedron {
             opts["diameter"] = 1;
         }
         if (!("g_x_offset" in opts)) {
-            opts["g_x_offset"] = opts["diameter"]*2*n;
+            opts["g_x_offset"] = opts["diameter"]*n*1.5;
         }
         if (!("g_y_offset" in opts)) {
-            opts["g_y_offset"] = 0;
+            opts["g_y_offset"] = 20;
         }
+        this.g_x_offset = opts["g_x_offset"];
+        this.g_y_offset = opts["g_y_offset"];
+		const container = document.getElementById(domStr);
+		container.addEventListener("contextmenu", e => e.preventDefault());
+		this.width = window.innerWidth * 0.9;
+		this.height = window.innerHeight * 0.9;
+		document.getElementById("info").width = this.width;
+		this.container = container;
+		this.canvas = d3.select("#"+domStr)
+		.append("svg")
+		.attr("width", this.width)
+		.attr("height", this.height)
+		.call(d3.drag().on("drag", this.dragNode.bind(this)))
+		.attr("style", "border-style: dotted;");
+		this.canvas.on("mousedown", this.mouseDown.bind(this));
+		this.container.obj = this;
+		// Clear all graph elements if any exist
+		this.canvas.selectAll("*").remove();
+
+		this.g = this.canvas.append("g");
+		this.xoffset = 0;
+		this.yoffset = 0;
+
         this.w = new Int32Array(n);
         this.stack_index = new Int32Array(n);
         this.codewords = [];
         this.last_codeword = null;
         this.codeword_obj = {};
-        this.make_stack_rec(this.w, n-1, opts["g_x_offset"], opts["g_y_offset"], opts, g);
+        this.make_stack_rec(this.w, n-1, this.g_x_offset, this.g_y_offset, opts, this.g);
     }
+
+    dragNode() {
+		this.xoffset += d3.event.dx;
+		this.yoffset += d3.event.dy;
+		this.g.attr("transform", "translate("+this.xoffset+" "+this.yoffset+")");
+	}
+
+	/**
+	 * React to a mouse down event by adding a node
+	 */
+	mouseDown() {
+		let point = d3.mouse(d3.event.currentTarget);
+	}
+
+	/**
+	 * A function which toggles all of the visible elements to show
+	 */
+	show = function() {
+		this.container.style("display", "block");
+	}
+
+	/**
+	 * A function which toggles all of the visible elements to hide
+	 */
+	hide = function() {
+		this.container.style("display", "none");
+	}
 
     make_stack_rec(w, d, g_x_offset, y_offset, opts, g) {
         const n = w.length;
@@ -348,7 +410,7 @@ class Associahedron {
                     "dotted_edges":dotted_edges
                 });
                 g.append("text")
-                .attr("x", x_offset-2*diam-n*0.07)
+                .attr("x", x_offset-1.1*diam-n*0.07)
                 .attr("y", y_offset+dy)
                 .attr("text-anchor", "middle")
                 .text(arrstr(wi));
@@ -395,14 +457,3 @@ class Associahedron {
     }
 
 }
-/*
-def make_octagon_stack():
-    """
-    As an example, make a stack of octagons
-    """
-    plt.figure(figsize=(20, 400))
-    ax = plt.subplot(111)
-    a6 = Associahedron(6, {"draw_tree":True}, ax=ax)
-    plt.axis("equal")
-    plt.savefig("octagonstack.svg", bbox_inches='tight')    
-*/
