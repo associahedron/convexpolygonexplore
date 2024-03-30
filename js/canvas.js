@@ -11,6 +11,7 @@ class Canvas2D {
 		.append("svg")
 		.attr("width", this.width)
 		.attr("height", this.height)
+		.call(d3.drag().on("drag", this.dragNode.bind(this)))
 		.attr("style", "border-style: dotted;");
 		this.canvas.on("mousedown", this.mouseDown.bind(this));
 		this.container.obj = this;
@@ -18,11 +19,21 @@ class Canvas2D {
 		// Clear all graph elements if any exist
 		this.canvas.selectAll("*").remove();
 
-		let g = this.canvas.append("g").attr("class", "poly1");
+		this.g = this.canvas.append("g").attr("class", "poly1");
 		//let c = new Codeword([0, 2, 1, 0]);
 		//c.draw(g, 100, [100, 100]);
-		let a = new Associahedron(4, {"diameter":100}, g);
+		let a = new Associahedron(6, {"diameter":100}, this.g);
+		this.xoffset = 0;
+		this.yoffset = 0;
 	}
+
+	dragNode() {
+		console.log("Dragging", d3.event.dx, d3.event.dy);
+		this.xoffset += d3.event.dx;
+		this.yoffset += d3.event.dy;
+		this.g.attr("transform", "translate("+this.xoffset+" "+this.yoffset+")");
+	}
+
 	/*updateGodzillaLine() {
 		let Ps = this.getGodzillaLine();
 		this.godzillaLineCollection.selectAll("line").each(function(){

@@ -118,6 +118,8 @@ class Codeword {
                 Color to draw dotted edges if they exist
             draw_index: bool
                 If True, draw indices instead of values
+            stroke_width: float
+                With of edges
         }
      */
     draw(g, d, c, options) {
@@ -151,6 +153,10 @@ class Codeword {
         if (!("draw_index" in options)) {
             options["draw_index"] = false;
         }
+        if (!("stroke_width" in options)) {
+            options["stroke_width"] = 2.5;
+        }
+        const stroke_width = options["stroke_width"];
         
         // Step 1: Draw polygon boundary
         const min_idx = options["min_idx"];
@@ -170,6 +176,14 @@ class Codeword {
             Xy.push(y);
             Tx.push(r*1.25*Math.cos(theta) + c[0]);
             Ty.push(-r*1.25*Math.sin(theta) + c[1]);
+            if (i in options["circled_vertices"]) {
+                g.append("circle")
+                .attr("r", 10)
+                .attr("fill", "none")
+                .attr("stroke", "red")
+                .attr("stroke-width", 1.5)
+                .attr("cx", Tx[i]).attr("cy", Ty[i]);
+            }
 			g.append("circle")
 				.attr("r", 5)
 				.attr("fill", options["color"])
@@ -211,7 +225,7 @@ class Codeword {
             .attr("x2", Xx[i+1])
             .attr("y2", Xy[i+1])
             .attr("stroke", options["color"])
-            .attr("stroke-width", 1);
+            .attr("stroke-width", stroke_width);
         }
         // Step 2b: Internal edges
         const edges = this.get_edges(min_idx);
@@ -225,20 +239,10 @@ class Codeword {
             .attr("x2", Xx[j])
             .attr("y2", Xy[j])
             .attr("stroke", options["color"])
-            .attr("stroke-width", 1);
+            .attr("stroke-width", stroke_width);
         }
 
-        // Step 3: Circle any vertices
-        for (let i = 0; i < options["circled_vertices"].length; i++) {
-            let idx = options["circled_vertices"][i];
-			g.append("circle")
-            .attr("r", 10)
-            .attr("fill", "none")
-            .attr("stroke", "red")
-            .attr("cx", Tx[idx]).attr("cy", Ty[idx]);
-        }
-
-        // Step 4: Draw any dotted edges
+        // Step 3: Draw any dotted edges
         for (let idx = 0; idx < options["dotted_edges"].length; idx++) {
             const e = options["dotted_edges"][idx];
             const i = e[0];
@@ -249,7 +253,7 @@ class Codeword {
             .attr("x2", Xx[j])
             .attr("y2", Xy[j])
             .attr("stroke", options["dotted_color"])
-            .attr("stroke-width", 1)
+            .attr("stroke-width", stroke_width)
             .style("stroke-dasharray", "10, 5");
         }
 
@@ -290,8 +294,8 @@ class Associahedron {
         .attr("x", x_offset)
         .attr("y", y_offset)
         .attr("text-anchor", "middle")
-        .text("d = " + d + ", h = " + h, dy=0.65*diam);
-        let y1 = y_offset+1.4*diam/2;
+        .text("d = " + d + ", h = " + h, dy=0.7*diam);
+        let y1 = y_offset-diam/7;
         let n_items = 0;
         let vals = [];
         if (this.stack_index[d]%2 == 0) {
@@ -358,7 +362,7 @@ class Associahedron {
                 });
                 let s = "";
                 for (let k = d; k < wi.length; k++) {
-                    s += wi[d];
+                    s += wi[k];
                 }
                 g.append("text")
                 .attr("x", x_offset)
@@ -370,19 +374,24 @@ class Associahedron {
             n_items += ni;
             y_offset += diam*1.5*ni
         }
-        let y2 = y_offset - 1.4*diam/2;
+        let y2 = y_offset - diam/7;
         let x1 = x_offset - 1.5*diam/2;
         let x2 = x1 + 1.5*diam;
-        if (d == 1) {
-            x1 -= 0.1*n*diam;
-        }
 
-        /*let xbox = [x1, x1, x2, x2, x1]
-        let ybox = [y1, y2, y2, y1, y1]
-            ax.plot(xbox, ybox, c='k')
-            if self.stack_index[d]%2 == 0:
-                ax.fill(xbox, ybox, c=[0.9]*3)*/
-        return n_items
+        let r = g.append("rect")
+        .attr("x", x1)
+        .attr("y", y1)
+        .attr("width", x2-x1)
+        .attr("height", y2-y1)
+        .attr("stroke", "black")
+        if (this.stack_index[d]%2 == 0) {
+            r.attr("fill-opacity","0.3")
+            .attr("fill", "gray")
+        }
+        else {
+            r.attr("fill", "none");
+        }
+        return n_items;
     }
 
 }
